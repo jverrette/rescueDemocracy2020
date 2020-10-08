@@ -5,10 +5,13 @@ import random
 import time
 import tweepy
 
-import login
-auth = login.main()
+import loginJaro
+auth = loginJaro.main()
 api = tweepy.API(auth)
+
 rootPath = '/home/jean/Documents/rescueDemocracy2020'
+folderPath = os.path.join(rootPath, 'memes')
+memes = [os.path.join(folderPath, f) for f in os.listdir(folderPath) if os.path.isfile(os.path.join(folderPath, f))]
 
 badWords = [
     'savethechildren',
@@ -18,7 +21,7 @@ badWords = [
     'wwg1gwaw',
     'saveourchildren',
     '10daysofdarkness',
-    'wwg1gwa ',
+    'wwg1gwa',
     'qanon2020',
     'trusttheplan',
     'followthewhiterabbit',
@@ -53,9 +56,8 @@ responses = ["Republican legislative aide Howard L. Brooks was charged with mole
 "Republican congressman and anti-gay activist Robert Bauman was charged with having sex with a 16-year-old boy he picked up at a gay bar.",
 "Republican Committee Chairman Jeffrey Patti was arrested for distributing a video clip of a 5-year-old girl being raped.",
 "Republican activist Marty Glickman (a.k.a. Republican Marty), was taken into custody by Florida police on four counts of unlawful sexual activity with an underage girl and one count of delivering the drug LSD."]
-
+#    'Minnesota',
 states = [
-    'Minnesota',
     'Michigan',
     'Wisconsin',
     'Nevada',
@@ -80,17 +82,22 @@ def accountNames(state):
 # Get a list of recent tweets from news site
 # check responses for misinformation
 
-def reply(replyText, badTweet):
-    fullText = '@' + badTweet.user.screen_name + replyText
-    try:
-        t = api.update_status(status=fullText, in_reply_to_status_id=badTweet.id, auto_populate_reply_metadata=True)
-        print('sucess with: ' + badTweet.user.screen_name)
-        #completed(originalReTweet.user.screen_name)
-        return True
-    except:
-        print('failed with: ' + badTweet.user.screen_name)
-        return False
+def spamMeme(targetId):
+    user = api.get_user(targetId)
+
+    query = 'from:%s '%user.screen_name + ' Trump'
+    for tweet in tweepy.Cursor(api.search,q=query, count = 10, result_type='recent', tweet_mode='extended').items(1):
+
+        # post a random of the responses to a bad tweet
+        replyImage = memes[random.randrange(0, len(memes))]
+        # Upload image
+        media = api.media_upload(replyImage)
+ 
+        # Post tweet with image
+        post_result = api.update_status(status="#VoteHimOut", media_ids=[media.media_id], in_reply_to_status_id=tweet.id, auto_populate_reply_metadata=True)
+
     time.sleep(15)
+    return
 
 '''
 get replies to a particular person, regardless of the story or original post
@@ -98,7 +105,8 @@ get replies to a particular person, regardless of the story or original post
 def respondBadReplies(targetId):
     user = api.get_user(targetId)
 
-    for tweet in tweepy.Cursor(api.search,q='@'+user.screen_name, result_type='recent').items(100):
+    query = 'to:user.screen_name ' + ' OR '.join(badWords)
+    for tweet in tweepy.Cursor(api.search,q='@'+user.screen_name, count = 10, result_type='recent', tweet_mode='extended'):
         if any([el in tweet.text.lower() for el in badWords]):
             # post a random of the responses to a bad tweet
             replyText = responses[random.randrange(0, 25)]
@@ -110,13 +118,13 @@ def respondBadReplies(targetId):
 # Iterate through each
 
 def main():
-    for state in ['Florida', 'New_Hampshire']:
+    for state in states:
         print(state)
         userIds = accountNames(state)
         for i, userId in enumerate(userIds):
             print(i)
             try:
-                respondBadReplies(userId)
+                spamMeme(userId)
             except:
                 time.sleep(900)
 if __name__== '__main__':

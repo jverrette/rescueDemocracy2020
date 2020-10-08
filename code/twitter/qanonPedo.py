@@ -13,23 +13,23 @@ rootPath = '/home/jean/Documents/rescueDemocracy2020'
 folderPath = os.path.join(rootPath, 'memes')
 memes = [os.path.join(folderPath, f) for f in os.listdir(folderPath) if os.path.isfile(os.path.join(folderPath, f))]
 
+
+statesFile = os.path.join(rootPath, 'data/qanon', 'states.csv')
+states = pd.read_csv(statesFile)
+# df.columns Index(['State', 'Abbreviation'], dtype='object')
+
 badWords = [
-    'savethechildren',
-    'savethechildrenworldwide',
-    'childtrafficking',
-    'lolitaexpress',
-    'wwg1gwaw',
-    'saveourchildren',
+    'SaveTheChildren',
+    'ChildTrafficking',
+    'LolitaExpress',
+    'WWG1GWAW',
+    'SaveOurChildren',
     '10daysofdarkness',
-    'wwg1gwa',
-    'qanon2020',
-    'trusttheplan',
-    'followthewhiterabbit',
-    'greatawakeningworldwide',
-    'redoctober',
-    'pedophile',
-    'pedophilia',
-    'child predator']
+    'WWG1GWA',
+    'QAnon2020',
+    'TrustThePlan',
+    'FollowTheWhiteRabbit',
+    'GreatAwakeningWorldwide']
 
 responses = ["Republican legislative aide Howard L. Brooks was charged with molesting a 12-year old boy and possession of child pornography.",
 "Republican Senate candidate John Hathaway was accused of having sex with his 12-year old baby sitter and withdrew his candidacy after the allegations were reported in the media.",
@@ -56,8 +56,9 @@ responses = ["Republican legislative aide Howard L. Brooks was charged with mole
 "Republican congressman and anti-gay activist Robert Bauman was charged with having sex with a 16-year-old boy he picked up at a gay bar.",
 "Republican Committee Chairman Jeffrey Patti was arrested for distributing a video clip of a 5-year-old girl being raped.",
 "Republican activist Marty Glickman (a.k.a. Republican Marty), was taken into custody by Florida police on four counts of unlawful sexual activity with an underage girl and one count of delivering the drug LSD."]
-#    'Minnesota',
+
 states = [
+    'Minnesota',
     'Michigan',
     'Wisconsin',
     'Nevada',
@@ -99,25 +100,82 @@ def spamMeme(targetId):
     time.sleep(15)
     return
 
+def saveArray(array, accomplishedList = True):
+    df = pd.DataFrame()
+    df['names'] = [el[0] for el in array]
+    df['id'] = [el[1] for el in array]
+
+    fileName = 'completed.csv' if accomplishedList else 'todo.csv'
+    fullPath = os.path.join(rootPath, 'data/qanon', fileName)
+    df.to_csv(fullPath, index=False)
+    return
+
+def openArray(accomplishedList = True):
+
+    fileName = 'completed.csv' if accomplishedList else 'todo.csv'
+    fullPath = os.path.join(rootPath, 'data/qanon', fileName)
+    df = pd.read_csv(fullPath, header=0)
+
+    return [(name, str(id)) for name, id in zip(df['names'].values, df['id'].values)]
+
+# checks whether user is located in the united states or not
+def inUSA(user):
+    locationString = user.location
+    if not locationString:
+        return True
+
+    strings = [el.strip() for el in locationString.split(',')]
+    for string in strings:
+        if string in ['US', 'USA', 'United States of America', 'USofA', 'America']:
+            return True
+        #'State', 'Abbreviation'
+        if string in states['State']:
+            return True
+        if string in states['Abbreviation']:
+            return True
+
+    return False
+
 '''
 get replies to a particular person, regardless of the story or original post
 '''
-def respondBadReplies(targetId):
-    user = api.get_user(targetId)
+def getBadTweets(todo, n = 1000):
 
-    query = 'to:user.screen_name ' + ' OR '.join(badWords)
-    for tweet in tweepy.Cursor(api.search,q='@'+user.screen_name, count = 10, result_type='recent', tweet_mode='extended'):
-        if any([el in tweet.text.lower() for el in badWords]):
-            # post a random of the responses to a bad tweet
-            replyText = responses[random.randrange(0, 25)]
-            reply(replyText, tweet)
+    query = ' OR '.join(['#'+badword for badword in badWords])
+    # collect as many tweets with qanon hashtags as possible
+    for tweet in tweepy.Cursor(api.search, q=query, count = n, result_type='recent', tweet_mode='extended').items(n):
+    #180*100 = 18k tweets per 15 minutes
 
-    return
+        # restrict to tweets that are replies
+        try:
+            user = api.get_user(tweet.in_reply_to_user_id)
+            
+            # restrict to tweets that reply to a tweet from a user with many followers
+            if (user.followers_count > 1000) & (inUSA(user)):
+                todo.append((tweet.author.screen_name, tweet.id))
+        except:
+            pass
+
+    return todo
+'''
+[('Davros_J_Slave', 1314298598574755840),
+ ('JungleRedNM', 1314293842321924096),
+ ('KnieriemLisa', 1314292450165284864),
+ ('reidbianco', 1314291096764084224),
+ ('1007julie', 1314290507900739590),
+ ('TheMorrigan47', 1314279449307746306),
+ ('SwifuFN', 1314279308332916736),
+ ('uncommonlag', 1314276964404850688),
+ ('sweetsgrandma', 1314271481921179649),
+ ('KemiOlunloyo', 1314264030522101761)]
+'''
+
 
 # open twitter IDs for a single state
 # Iterate through each
 
 def main():
+    '''
     for state in states:
         print(state)
         userIds = accountNames(state)
@@ -127,6 +185,11 @@ def main():
                 spamMeme(userId)
             except:
                 time.sleep(900)
+    '''
+    todo = openArray(False)
+    todo = getBadTweets(todo)
+    saveArray(todo, False)
+
 if __name__== '__main__':
     main()
 '''

@@ -1,4 +1,5 @@
 import csv
+import datetime
 import os
 import pandas as pd
 import random
@@ -100,6 +101,18 @@ def spamMeme(targetId):
     time.sleep(15)
     return
 
+def replyBadTweet(targetId):
+
+    # post a random of the responses to a bad tweet
+    republicanPedo = responses[random.randrange(0, len(responses))]
+ 
+    # Post tweet with image
+    post_result = api.update_status(status=republicanPedo, in_reply_to_status_id=tweet.id, auto_populate_reply_metadata=True)
+
+    print('Response sent to Republican: Wait 15 seconds')
+    time.sleep(15)
+    return
+
 def saveArray(array, accomplishedList = True):
     df = pd.DataFrame()
     df['names'] = [el[0] for el in array]
@@ -121,17 +134,20 @@ def openArray(accomplishedList = True):
 # checks whether user is located in the united states or not
 def inUSA(user):
     locationString = user.location
+    '''
+    # include users without the location attribute specified
     if not locationString:
         return True
+    '''
 
     strings = [el.strip() for el in locationString.split(',')]
     for string in strings:
-        if string in ['US', 'USA', 'United States of America', 'USofA', 'America']:
+        if string.lower() in [el.lower() for el in ['US', 'USA', 'United States of America', 'USofA', 'America']]:
             return True
         #'State', 'Abbreviation'
-        if string in states['State']:
+        if string.lower() in [el.lower() for el in states['State'].values]:
             return True
-        if string in states['Abbreviation']:
+        if string.lower() in [el.lower() for el in states['Abbreviation'].values]:
             return True
 
     return False
@@ -139,24 +155,46 @@ def inUSA(user):
 '''
 get replies to a particular person, regardless of the story or original post
 '''
-def getBadTweets(todo, n = 1000):
+def getBadTweets(todo, minTime, maxTime):
 
     query = ' OR '.join(['#'+badword for badword in badWords])
-    # collect as many tweets with qanon hashtags as possible
-    for tweet in tweepy.Cursor(api.search, q=query, count = n, result_type='recent', tweet_mode='extended').items(n):
-    #180*100 = 18k tweets per 15 minutes
 
+    # collect as many tweets with qanon hashtags as possible
+    pages = tweepy.Cursor(api.search, q=query, count = n, tweet_mode='extended', since = minTime.strftime('%Y-%m-%d'), until = maxTime.strftime('%Y-%m-%d')).pages()
+    print('Search Done')
+    for page in pages:
+        tweetPerPage = 0
+        for tweet in page:
+            tweetPerPage += 1
+        
+    #180*100 = 18k tweets per 15 minutes
+    # To exceed the 5000-per-hour rate limit, 
+    # you'd need to be doing at least 83 calls per minute or 1.4 calls per second.
+    # restrict to tweets that are replies
+            try:
+                user = api.get_user(tweet.in_reply_to_user_id)
+            
+                # restrict to tweets that reply to a tweet from a user with many followers
+                if (user.followers_count > 1000) & (inUSA(user)):
+                    todo.append((tweet.author.screen_name, tweet.id))
+                    replyBadTweet(tweet.id)
+            except:
+                pass
+        print('Tweets per Page: %d'%tweetPerPage)
+
+    return todo
+'''
         # restrict to tweets that are replies
         try:
             user = api.get_user(tweet.in_reply_to_user_id)
             
             # restrict to tweets that reply to a tweet from a user with many followers
-            if (user.followers_count > 1000) & (inUSA(user)):
+            if user.followers_count > 1000:
                 todo.append((tweet.author.screen_name, tweet.id))
         except:
             pass
+'''
 
-    return todo
 '''
 [('Davros_J_Slave', 1314298598574755840),
  ('JungleRedNM', 1314293842321924096),
@@ -187,8 +225,19 @@ def main():
                 time.sleep(900)
     '''
     todo = openArray(False)
-    todo = getBadTweets(todo)
-    saveArray(todo, False)
+    maxTime = datetime.datetime.now()
+    minTime = maxTime - datetime.timedelta(hours=24, minutes=0)
+
+    while True:
+        try:
+            todo = getBadTweets(todo, minTime, maxTime)
+            saveArray(todo, False)
+            minTime = minTime - datetime.timedelta(hours=24, minutes=0)
+            maxTime = maxTime - datetime.timedelta(hours=24, minutes=0)
+
+        except:
+            print('Too many requests: Wait 15 minutes')
+            time.sleep(900)
 
 if __name__== '__main__':
     main()
